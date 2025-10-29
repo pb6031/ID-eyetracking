@@ -1,4 +1,4 @@
-### Eye-Tracking Based Parallel CNN for Intellectual Disability Classification
+### Eye-Tracking Based CNN for Intellectual Disability Classification
 
 ---
 
