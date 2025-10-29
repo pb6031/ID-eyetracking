@@ -8,9 +8,9 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from sklearn.model_selection import GroupKFold
 from sklearn.metrics import f1_score, accuracy_score, log_loss, confusion_matrix, precision_score, recall_score
 
-# 이미지 로드 및 전처리
+# image load
 def load_and_process_images(folder_path, target_size=(128, 128)):
-    #파일명 형식: [이름]_[label]_[id]_[문제번호]_[task이름].png
+    #image name format: [name]_[label]_[subject id]_[problem number]_[task type].png
     data = []
     for filename in os.listdir(folder_path):
         if filename.endswith('.png'):
@@ -32,8 +32,8 @@ def load_and_process_images(folder_path, target_size=(128, 128)):
             
     return pd.DataFrame(data)
 
-# 이미지 데이터 경로
-folder_path = './image_data/task'
+# image data path
+folder_path = './image'
 image_data = load_and_process_images(folder_path)
 
 pivoted = image_data.pivot_table(
@@ -52,7 +52,7 @@ labels_df = image_data.drop_duplicates('id').set_index('id')
 sample_ids = pivoted.index.get_level_values(0).values
 y = np.array([labels_df.loc[i, 'label'] for i in sample_ids])
 
-# id별로 그룹화
+# group by id
 group = sample_ids
 
 def create_model():
@@ -74,25 +74,25 @@ def create_model():
         flatten = Flatten()(maxp3)
         return flatten
     
-    # CNN 적용
+    # CNN
     latent_task1 = cnn(input1)
     latent_task2 = cnn(input2)
     latent_task3 = cnn(input3)
 
-    #task별 output
+    #task output
     output1 = Dense(1, activation='sigmoid', name="Output_Task1")(latent_task1)
     output2 = Dense(1, activation='sigmoid', name="Output_Task2")(latent_task2)
     output3 = Dense(1, activation='sigmoid', name="Output_Task3")(latent_task3)
 
-    #latent vector를 concat
+    #concat
     concat= Concatenate()([latent_task1, latent_task2, latent_task3])
     dense = Dense(256, activation='relu')(concat)
     dropout = Dropout(0.3)(dense)
     
-    #concat한 output
+    #concat output
     output = Dense(1, activation='sigmoid', name='Output')(dropout)
 
-    # 모델 정의 (task 3개+total)
+    # model
     model = Model(inputs=[input1, input2, input3], outputs=[output1, output2, output3, output])
     
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
@@ -123,7 +123,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X_task1, y, groups=group)):
     es = EarlyStopping(monitor='val_loss', patience=8, mode='min', verbose=1)
     reLR = ReduceLROnPlateau(patience=4, factor=0.5, verbose=1)
     
-    # 모델 학습
+    # train
     history = model.fit([X1_train, X2_train, X3_train], 
                     [y_train, y_train, y_train, y_train],
                     validation_data=([X1_val, X2_val, X3_val], [y_val, y_val, y_val, y_val]),
@@ -134,7 +134,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X_task1, y, groups=group)):
 
     model.load_weights(checkpoint_path)
     
-    # 모델 평가    
+    # eval    
     tn, fp, fn, tp = confusion_matrix(y_val, y_pred_binary_total).ravel()
 
     acc = accuracy_score(y_val, y_pred_binary_total)
@@ -154,7 +154,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X_task1, y, groups=group)):
         'specificity_total': specificity
     })
 
-    # 개별 Task별 예측값
+    # prediction
     y_pred_task1, y_pred_task2, y_pred_task3, y_pred_total = model.predict([X1_val, X2_val, X3_val])
 
     preds_task1 = y_pred_task1.flatten()
@@ -167,11 +167,10 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X_task1, y, groups=group)):
     y_pred_binary_task3 = (preds_task3 > 0.5).astype(int)
     y_pred_binary_total = (preds_total > 0.5).astype(int)
 
-    #prediction csv 생성
+    #prediction csv
     index_df = pivoted.reset_index().iloc[val_idx][['id', 'problem_number']].copy()
     index_df['True Label'] = y_val
     
-    #task 마다 예측값 구해서 합치기
     index_df['0_Predicted Value'] = preds_task1
     index_df['0_Predicted Label'] = y_pred_binary_task1
 
@@ -185,4 +184,5 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X_task1, y, groups=group)):
     index_df['Total_Predicted Label'] = y_pred_binary_total
 
     pred_list.append(index_df)
+
 
